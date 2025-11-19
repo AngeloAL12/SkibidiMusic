@@ -1,0 +1,16 @@
+# --- SECRETOS (CRÍTICO) ---
+.env
+
+# --- PyCharm / IDE ---
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Mac OS ---
+.DS_Store
