@@ -5,8 +5,15 @@ import asyncio
 import os
 import spotipy
 import random
+import base64
 
 from spotipy.oauth2 import SpotifyClientCredentials
+
+if os.getenv('YOUTUBE_COOKIES_B64'):
+    with open('cookies.txt', 'wb') as f:
+        f.write(base64.b64decode(os.getenv('YOUTUBE_COOKIES_B64')))
+    print("🍪 Archivo cookies.txt regenerado desde Variable de Entorno.")
+
 
 # --- CONFIGURACIÓN ---
 intents = discord.Intents.default()
@@ -26,7 +33,12 @@ if os.getenv('SPOTIPY_CLIENT_ID'):
     ))
 
 # Configuración de YouTube y FFmpeg
-yt_dl_options = {'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True}
+yt_dl_options = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'cookiefile': 'cookies.txt'  # <--- ¡ESTA ES LA CLAVE!
+}
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
 ffmpeg_options = {
