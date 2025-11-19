@@ -3,5 +3,4 @@ python-dotenv
 PyNaCl
 spotipy
 requests
-# CAMBIO CLAVE: Instalar directo desde GitHub para tener la última versión
 yt-dlp @ git+https://github.com/yt-dlp/yt-dlp.git@master

@@ -1,23 +1,18 @@
-FROM python:3.11-bookworm
+# Usamos una imagen que YA TIENE Python 3.11 y Node.js 20
+# Esto garantiza que yt-dlp encuentre el runtime de JS
+FROM nikolaik/python-nodejs:python3.11-nodejs20
 
-# 1. Instalar utilidades
+# Solo necesitamos instalar FFmpeg (Node y Python ya están)
 RUN apt-get update && \
-    apt-get install -y ffmpeg curl gnupg git && \
+    apt-get install -y ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
-
-# 2. INSTALAR NODE.JS (Versión 18 LTS)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs
-
-# 3. TRUCO FINAL: Crear enlace simbólico para que yt-dlp encuentre 'node'
-# Esto soluciona el WARNING amarillo en Debian/Linux
-RUN ln -s /usr/bin/nodejs /usr/local/bin/node || true
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# El flag --break-system-packages es necesario en versiones nuevas de Python/Debian
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
-COPY main.py .
+COPY . .
 
 CMD ["python", "main.py"]
