@@ -4,3 +4,5 @@ PyNaCl
 spotipy
 requests
 yt-dlp @ git+https://github.com/yt-dlp/yt-dlp.git@master
+# EL SALVAVIDAS:
+yt-dlp-get-pot

@@ -37,14 +37,10 @@ yt_dl_options = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    # 'cookiefile': 'cookies.txt', <--- COMENTA O BORRA ESTA LÍNEA
-    'cachedir': False,
-    'extractor_args': {
-        'youtube': {
-            # Probamos iOS primero, luego Android, luego Web como último recurso
-            'player_client': ['ios', 'android', 'web']
-        }
-    }
+    'cookiefile': 'cookies.txt', # <--- ¡IMPORTANTE: TIENE QUE ESTAR ACTIVO!
+    'cachedir': False
+    # Nota: Quitamos 'extractor_args'. Dejamos que yt-dlp use el 'web' client por defecto
+    # El plugin 'yt-dlp-get-pot' se activará solo y arreglará el bloqueo.
 }
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
