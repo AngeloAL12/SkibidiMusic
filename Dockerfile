@@ -1,14 +1,16 @@
-# Usamos la imagen híbrida oficial
+# Imagen híbrida oficial
 FROM nikolaik/python-nodejs:python3.11-nodejs20
 
-# 1. Instalar FFmpeg y herramientas
+# Instalar FFmpeg
 RUN apt-get update && \
     apt-get install -y ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
 
-# 2. HACK DE SEGURIDAD: Crear enlace manual de 'node'
-# A veces yt-dlp busca 'node' en /usr/local/bin y no lo ve
-RUN ln -s $(which node) /usr/local/bin/node || true
+# --- FIX DEFINITIVO PARA NODE.JS ---
+# Creamos enlaces en todas las rutas posibles donde yt-dlp podría buscar
+RUN ln -sf $(which node) /usr/local/bin/node || true && \
+    ln -sf $(which node) /usr/bin/node || true && \
+    ln -sf $(which node) /bin/node || true
 
 WORKDIR /app
 

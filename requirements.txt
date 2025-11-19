@@ -3,6 +3,5 @@ python-dotenv
 PyNaCl
 spotipy
 requests
+# Mantenemos la versión Master de yt-dlp, eso es vital
 yt-dlp @ git+https://github.com/yt-dlp/yt-dlp.git@master
-# EL SALVAVIDAS:
-yt-dlp-get-pot

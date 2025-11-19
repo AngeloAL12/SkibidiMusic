@@ -37,10 +37,15 @@ yt_dl_options = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'cookiefile': 'cookies.txt', # <--- ¡IMPORTANTE: TIENE QUE ESTAR ACTIVO!
-    'cachedir': False
-    # Nota: Quitamos 'extractor_args'. Dejamos que yt-dlp use el 'web' client por defecto
-    # El plugin 'yt-dlp-get-pot' se activará solo y arreglará el bloqueo.
+    'cachedir': False,
+    # NO usamos cookies con el modo TV (suele funcionar mejor sin ellas)
+    # 'cookiefile': 'cookies.txt',
+    'extractor_args': {
+        'youtube': {
+            # Truco maestro: Disfrazarse de Smart TV
+            'player_client': ['tv']
+        }
+    }
 }
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
