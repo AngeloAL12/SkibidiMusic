@@ -33,19 +33,16 @@ if os.getenv('SPOTIPY_CLIENT_ID'):
     ))
 
 # Configuración de YouTube y FFmpeg
-# Configuración de YouTube y FFmpeg
-# Configuración de YouTube y FFmpeg
 yt_dl_options = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'cookiefile': 'cookies.txt',
+    # 'cookiefile': 'cookies.txt', <--- COMENTA O BORRA ESTA LÍNEA
     'cachedir': False,
-    # --- EL TRUCO DE ANDROID ---
-    # Esto le dice a YouTube: "Soy una app de Android, dame el video fácil"
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'ios']
+            # Probamos iOS primero, luego Android, luego Web como último recurso
+            'player_client': ['ios', 'android', 'web']
         }
     }
 }
