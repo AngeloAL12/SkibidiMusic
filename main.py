@@ -37,15 +37,10 @@ yt_dl_options = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'cachedir': False,
-    # NO usamos cookies con el modo TV (suele funcionar mejor sin ellas)
-    # 'cookiefile': 'cookies.txt',
-    'extractor_args': {
-        'youtube': {
-            # Truco maestro: Disfrazarse de Smart TV
-            'player_client': ['tv']
-        }
-    }
+    'cookiefile': 'cookies.txt', # <--- ¡IMPORTANTE: ACTIVAR ESTO!
+    'cachedir': False
+    # Borramos la sección 'extractor_args' para usar el cliente Web normal.
+    # Ahora que Node.js funciona, el cliente Web podrá leer las cookies y resolver la firma.
 }
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
