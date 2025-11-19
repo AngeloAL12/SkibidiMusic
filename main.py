@@ -33,11 +33,13 @@ if os.getenv('SPOTIPY_CLIENT_ID'):
     ))
 
 # Configuración de YouTube y FFmpeg
+# Configuración de YouTube y FFmpeg
 yt_dl_options = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'cookiefile': 'cookies.txt'  # <--- ¡ESTA ES LA CLAVE!
+    'cookiefile': 'cookies.txt',
+    'cachedir': False
 }
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
