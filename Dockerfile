@@ -1,23 +1,17 @@
-FROM python:3.11-bookworm
+# Usamos la imagen que trae Python y Node preinstalados
+FROM nikolaik/python-nodejs:python3.11-nodejs20
 
-# 1. Instalar utilidades
+# Instalamos FFmpeg y Git
 RUN apt-get update && \
-    apt-get install -y ffmpeg curl gnupg git && \
+    apt-get install -y ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
-
-# 2. INSTALAR NODE.JS (Versión 18 LTS)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs
-
-# 3. TRUCO FINAL: Crear enlace simbólico para que yt-dlp encuentre 'node'
-# Esto soluciona el WARNING amarillo en Debian/Linux
-RUN ln -s /usr/bin/nodejs /usr/local/bin/node || true
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Instalamos dependencias
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
-COPY main.py .
+COPY . .
 
 CMD ["python", "main.py"]

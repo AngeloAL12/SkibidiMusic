@@ -39,8 +39,7 @@ yt_dl_options = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'cookiefile': 'cookies.txt',
-    'cachedir': False
+    'cachedir': False,
 }
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
