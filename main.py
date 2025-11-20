@@ -37,7 +37,6 @@ ffmpeg_options = {
 # --- VARIABLES GLOBALES ---
 queues = {}
 
-
 # --- FUNCIONES DE AYUDA ---
 
 async def search_youtube(query):

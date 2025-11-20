@@ -4,6 +4,7 @@ services:
     container_name: skibidi_music_bot
     restart: always
     network_mode: host
+
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - SPOTIPY_CLIENT_ID=${SPOTIPY_CLIENT_ID}
