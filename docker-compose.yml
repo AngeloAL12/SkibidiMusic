@@ -3,11 +3,6 @@ services:
     build: .
     container_name: skibidi_music_bot
     restart: always
-    # --- LA LÍNEA MÁGICA ---
-    # Esto elimina la capa de red de Docker y conecta el bot directo a tu router.
-    # Vital para que funcione la voz (UDP) en servidores caseros (Linux).
-    network_mode: host
-
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - SPOTIPY_CLIENT_ID=${SPOTIPY_CLIENT_ID}
