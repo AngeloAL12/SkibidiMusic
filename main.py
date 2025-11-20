@@ -5,8 +5,18 @@ import asyncio
 import os
 import spotipy
 import random
-
+import requests
+import re
+import base64  # ### NECESARIO PARA COOKIES
 from spotipy.oauth2 import SpotifyClientCredentials
+
+if os.getenv('YOUTUBE_COOKIES_B64'):
+    try:
+        with open('cookies.txt', 'wb') as f:
+            f.write(base64.b64decode(os.getenv('YOUTUBE_COOKIES_B64')))
+        print("🍪 Cookies regeneradas desde variable de entorno.")
+    except Exception as e:
+        print(f"⚠️ Error regenerando cookies: {e}")
 
 # --- CONFIGURACIÓN ---
 intents = discord.Intents.default()
@@ -14,7 +24,6 @@ intents.message_content = True
 intents.voice_states = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
-# Borramos el comando help por defecto para poner uno bonito
 bot.remove_command('help')
 
 # Configuración de Spotify
@@ -26,7 +35,13 @@ if os.getenv('SPOTIPY_CLIENT_ID'):
     ))
 
 # Configuración de YouTube y FFmpeg
-yt_dl_options = {'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True}
+yt_dl_options = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'cookiefile': 'cookies.txt',
+    'cachedir': False
+}
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
 ffmpeg_options = {
