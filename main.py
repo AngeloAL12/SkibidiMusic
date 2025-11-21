@@ -8,7 +8,13 @@ import random
 import requests
 import re
 import base64  # ### NECESARIO PARA COOKIES
+import shutil
 from spotipy.oauth2 import SpotifyClientCredentials
+
+print("🔍 DIAGNÓSTICO DE NODE:")
+node_path = shutil.which("node")
+print(f"👉 Python ve a Node en: {node_path}")
+
 
 if os.getenv('YOUTUBE_COOKIES_B64'):
     try:

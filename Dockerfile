@@ -1,11 +1,19 @@
+# Usamos la imagen híbrida
 FROM nikolaik/python-nodejs:python3.11-nodejs20
 
+# Instalar FFmpeg
 RUN apt-get update && \
     apt-get install -y ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf $(which node) /usr/local/bin/node || true && \
-    ln -sf $(which node) /usr/bin/node || true
+# --- LA SOLUCIÓN DEFINITIVA ---
+# Enlazamos Node a /usr/bin (la carpeta que NUNCA falla)
+# Aunque Node viva en /usr/local/bin, creamos un espejo en /usr/bin
+RUN ln -sf /usr/local/bin/node /usr/bin/node && \
+    ln -sf /usr/local/bin/node /usr/bin/nodejs
+
+# Verificación durante la construcción (para que veas que sí se hizo)
+RUN ls -l /usr/bin/node
 
 WORKDIR /app
 
