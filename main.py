@@ -181,7 +181,7 @@ async def help_command(ctx):
 async def play(ctx, *, search):
     if not ctx.author.voice: return await ctx.send("❌ Entra a un canal de voz.")
     if ctx.voice_client is None:
-        await ctx.author.voice.channel.connect()
+        await ctx.author.voice.channel.connect(timeout=60, reconnect=True)
     elif ctx.voice_client.channel != ctx.author.voice.channel:
         await ctx.voice_client.move_to(ctx.author.voice.channel)
 
