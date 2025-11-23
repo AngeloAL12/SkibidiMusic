@@ -11,8 +11,8 @@ def get_deezer_tracks(url):
     # Extraer ID del enlace
     # Ejemplos: https://www.deezer.com/track/12345, https://deezer.page.link/abcd
     
-    # Si es un enlace corto (deezer.page.link), hay que resolverlo primero
-    if "deezer.page.link" in url:
+    # Si es un enlace corto (deezer.page.link o link.deezer.com), hay que resolverlo primero
+    if "deezer.page.link" in url or "link.deezer.com" in url:
         try:
             response = requests.head(url, allow_redirects=True)
             url = response.url
