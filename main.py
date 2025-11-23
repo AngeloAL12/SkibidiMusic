@@ -261,10 +261,13 @@ async def play(ctx, *, search):
     if guild_id not in queues: queues[guild_id] = []
 
     queues[guild_id].extend(tracks)
-    await ctx.send(f"✅ Añadido a la cola ({len(tracks)} items).")
+    queues[guild_id].extend(tracks)
 
-    # Si no está reproduciendo, iniciar.
-    if ctx.voice_client and not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+    # Si ya está sonando, avisar que se agregó a la cola
+    if ctx.voice_client and (ctx.voice_client.is_playing() or ctx.voice_client.is_paused()):
+        await ctx.send(f"✅ Añadido a la cola. Canciones en espera: {len(queues[guild_id])}")
+    else:
+        # Si no suena nada, reproducir de inmediato (el mensaje de 'Reproduciendo' lo da play_next)
         await play_next(ctx)
 
 
