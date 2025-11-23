@@ -1,4 +1,4 @@
-# SkibidiMusic Bot 🎵
+# SkibidiMusic Bot
 
 SkibidiMusic Bot is a feature-rich Discord music bot designed to bring high-quality audio streaming to your server. It supports playing music from multiple sources including YouTube, Spotify, and Deezer, ensuring you never run out of tunes.
 
