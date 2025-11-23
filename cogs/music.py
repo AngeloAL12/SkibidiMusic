@@ -3,6 +3,7 @@ from discord.ext import commands
 import asyncio
 import random
 from utils.spotify import get_spotify_tracks
+from utils.deezer import get_deezer_tracks
 from utils.youtube import search_youtube
 import config
 
@@ -95,6 +96,15 @@ class Music(commands.Cog):
                 await status_msg.edit(content=f"✅ Playlist cargada ({len(tracks)} canciones).")
             else:
                 await status_msg.edit(content="❌ No se pudieron obtener canciones de Spotify.")
+        # Deezer
+        elif "deezer.com" in search or "deezer.page.link" in search:
+            status_msg = await ctx.send("🌈 Leyendo Deezer...")
+            found_tracks = get_deezer_tracks(search)
+            if found_tracks:
+                tracks.extend(found_tracks)
+                await status_msg.edit(content=f"✅ Playlist cargada ({len(tracks)} canciones).")
+            else:
+                await status_msg.edit(content="❌ No se pudieron obtener canciones de Deezer.")
         else:
             # YouTube
             if not search.startswith("http"):
