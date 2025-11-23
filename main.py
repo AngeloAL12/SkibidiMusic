@@ -7,7 +7,7 @@ import spotipy
 import random
 import requests
 import re
-import base64  # ### NECESARIO PARA COOKIES
+import base64 
 import shutil
 from spotipy.oauth2 import SpotifyClientCredentials
 
@@ -41,11 +41,22 @@ if os.getenv('SPOTIPY_CLIENT_ID'):
     ))
 
 # Configuración de YouTube y FFmpeg
-yt_dl_options = {
+ydl_opts = {
     'format': 'bestaudio/best',
     'noplaylist': True,
+    
+    'player_client': ['ios'], 
+    
+    'source_address': '0.0.0.0', 
+    
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
     'quiet': True,
-    'cachedir': False,
+    'no_warnings': True,
+    'default_search': 'auto',
+    
+    'cachedir': False 
 }
 ytdl = yt_dlp.YoutubeDL(yt_dl_options)
 
