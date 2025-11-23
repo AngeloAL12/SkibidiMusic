@@ -1,0 +1,18 @@
+# Archivos de entorno y secretos (¡MUY IMPORTANTE!)
+.env
+.git
+.gitignore
+docker-compose.yml
+
+# Cache de Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Logs y descargas locales
+logs/
+downloads/
+cookies.txt
+
+README.md
