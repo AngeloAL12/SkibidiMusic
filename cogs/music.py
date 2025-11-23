@@ -12,9 +12,26 @@ class Music(commands.Cog):
         self.bot = bot
         self.queues = {}
         self.ffmpeg_options = config.FFMPEG_OPTIONS
+        self.disconnect_timers = {}
+
+    def cancel_disconnect_timer(self, guild_id):
+        if guild_id in self.disconnect_timers:
+            self.disconnect_timers[guild_id].cancel()
+            del self.disconnect_timers[guild_id]
+
+    async def disconnect_after_inactivity(self, ctx):
+        guild_id = ctx.guild.id
+        await asyncio.sleep(300)  # 5 minutos
+        if ctx.voice_client and ctx.voice_client.is_connected() and not ctx.voice_client.is_playing():
+            self.queues[guild_id] = []
+            await ctx.voice_client.disconnect()
+            await ctx.send("💤 **Me desconecté por inactividad.**")
+        if guild_id in self.disconnect_timers:
+            del self.disconnect_timers[guild_id]
 
     async def play_next(self, ctx):
         if ctx.guild.id in self.queues and len(self.queues[ctx.guild.id]) > 0:
+            self.cancel_disconnect_timer(ctx.guild.id)
             query = self.queues[ctx.guild.id].pop(0)
             
             # Verificar conexión antes de reproducir
@@ -51,8 +68,9 @@ class Music(commands.Cog):
                 await ctx.send(f"❌ Error reproduciendo esa canción. Pasando a la siguiente...")
                 await self.play_next(ctx)
         else:
-            # Cola vacía
-            pass
+            # Cola vacía, iniciar timer de desconexión
+            if ctx.guild.id not in self.disconnect_timers:
+                self.disconnect_timers[ctx.guild.id] = self.bot.loop.create_task(self.disconnect_after_inactivity(ctx))
 
     async def ensure_voice_connection(self, ctx):
         if not ctx.author.voice:
@@ -164,6 +182,7 @@ class Music(commands.Cog):
     @commands.command(name='reset')
     async def reset(self, ctx):
         """Comando de emergencia para desbugear el bot"""
+        self.cancel_disconnect_timer(ctx.guild.id)
         self.queues[ctx.guild.id] = []
         if ctx.voice_client:
             await ctx.voice_client.disconnect(force=True)
@@ -172,6 +191,7 @@ class Music(commands.Cog):
     @commands.command(name='stop')
     async def stop(self, ctx):
         if ctx.voice_client:
+            self.cancel_disconnect_timer(ctx.guild.id)
             self.queues[ctx.guild.id] = []
             await ctx.voice_client.disconnect()
             await ctx.send("👋 Adiós.")
@@ -187,6 +207,9 @@ class Music(commands.Cog):
         if ctx.voice_client and ctx.voice_client.is_playing():
             ctx.voice_client.pause()
             await ctx.send("⏸️ **Música pausada.**")
+            # Iniciar timer al pausar
+            if ctx.guild.id not in self.disconnect_timers:
+                self.disconnect_timers[ctx.guild.id] = self.bot.loop.create_task(self.disconnect_after_inactivity(ctx))
         else:
             await ctx.send("No hay música sonando para pausar.")
 
@@ -194,6 +217,7 @@ class Music(commands.Cog):
     async def resume(self, ctx):
         if ctx.voice_client and ctx.voice_client.is_paused():
             ctx.voice_client.resume()
+            self.cancel_disconnect_timer(ctx.guild.id)
             await ctx.send("▶️ **Música reanudada.**")
         else:
             await ctx.send("La música no está pausada.")
@@ -214,7 +238,7 @@ class Music(commands.Cog):
         if member == self.bot.user: return
         voice_client = member.guild.voice_client
         if voice_client and len(voice_client.channel.members) == 1:
-            await asyncio.sleep(60)
+            await asyncio.sleep(300)
             if voice_client.is_connected() and len(voice_client.channel.members) == 1:
                 self.queues[member.guild.id] = []
                 await voice_client.disconnect()
