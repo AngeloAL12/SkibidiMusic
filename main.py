@@ -5,17 +5,16 @@ import asyncio
 import os
 import spotipy
 import random
-import requests
-import re
-import base64 
 import shutil
 from spotipy.oauth2 import SpotifyClientCredentials
+import base64
 
+# --- DIAGNÓSTICO AL INICIO ---
 print("🔍 DIAGNÓSTICO DE NODE:")
-node_path = shutil.which("node")
+node_path = shutil.which("node") or shutil.which("nodejs")
 print(f"👉 Python ve a Node en: {node_path}")
 
-
+# Gestión de Cookies
 if os.getenv('YOUTUBE_COOKIES_B64'):
     try:
         with open('cookies.txt', 'wb') as f:
@@ -24,7 +23,7 @@ if os.getenv('YOUTUBE_COOKIES_B64'):
     except Exception as e:
         print(f"⚠️ Error regenerando cookies: {e}")
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN DISCORD ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
@@ -32,7 +31,7 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
-# Configuración de Spotify
+# --- CONFIGURACIÓN SPOTIFY ---
 sp = None
 if os.getenv('SPOTIPY_CLIENT_ID'):
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
@@ -40,25 +39,25 @@ if os.getenv('SPOTIPY_CLIENT_ID'):
         client_secret=os.getenv('SPOTIPY_CLIENT_SECRET')
     ))
 
-# Configuración de YouTube y FFmpeg
+# --- CONFIGURACIÓN YOUTUBE ---
 ydl_opts = {
     'format': 'bestaudio/best',
     'noplaylist': True,
-    
-    'player_client': ['ios'], 
-    
-    'source_address': '0.0.0.0', 
-    
+    'player_client': ['ios', 'android', 'web'], # Rotación de clientes para evitar bloqueos
+    'source_address': '0.0.0.0',
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    
-    'cachedir': False 
+    'cachedir': False
 }
-ytdl = yt_dlp.YoutubeDL(ydl_opts)
+
+try:
+    ytdl = yt_dlp.YoutubeDL(ydl_opts)
+except Exception as e:
+    print(f"Error inicializando yt-dlp: {e}")
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
@@ -68,41 +67,69 @@ ffmpeg_options = {
 # --- VARIABLES GLOBALES ---
 queues = {}
 
-# --- FUNCIONES DE AYUDA ---
+# --- FUNCIONES ---
 
 async def search_youtube(query):
-    loop = asyncio.get_event_loop()
-    if "youtube.com" in query or "youtu.be" in query:
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
-    else:
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
-
-    if 'entries' in data:
-        data = data['entries'][0]
-    return {'url': data['url'], 'title': data['title']}
-
+    loop = bot.loop or asyncio.get_running_loop()
+    try:
+        if "youtube.com" in query or "youtu.be" in query:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
+        else:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
+        
+        if 'entries' in data:
+            data = data['entries'][0]
+        return {'url': data['url'], 'title': data['title']}
+    except Exception as e:
+        print(f"Error buscando en YT: {e}")
+        return None
 
 async def play_next(ctx):
     if ctx.guild.id in queues and len(queues[ctx.guild.id]) > 0:
         query = queues[ctx.guild.id].pop(0)
+        
+        # Verificar conexión antes de reproducir
+        if not ctx.voice_client or not ctx.voice_client.is_connected():
+            return # Se desconectó, paramos la cola
+
         try:
+            print(f"🔎 Buscando: {query}")
             track_info = await search_youtube(query)
+            
+            if not track_info:
+                await ctx.send(f"⚠️ No pude encontrar: {query}. Pasando a la siguiente.")
+                await play_next(ctx)
+                return
+
             source = discord.FFmpegPCMAudio(track_info['url'], **ffmpeg_options)
-            ctx.voice_client.play(source, after=lambda e: bot.loop.create_task(play_next(ctx)))
+            
+            # Callback seguro para la siguiente canción
+            def after_playing(error):
+                if error:
+                    print(f"Error de reproducción: {error}")
+                coro = play_next(ctx)
+                fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+                try:
+                    fut.result()
+                except:
+                    pass
 
-            # Título limpio para el chat
-            display_title = track_info['title']
-            await ctx.send(f"🎶 Reproduciendo: **{display_title}**")
+            ctx.voice_client.play(source, after=after_playing)
+            await ctx.send(f"🎶 Reproduciendo: **{track_info['title']}**")
+            
         except Exception as e:
-            await ctx.send(f"❌ Error al reproducir '{query}': {e}")
+            print(f"Error reproduciendo {query}: {e}")
+            await ctx.send(f"❌ Error reproduciendo esa canción. Pasando a la siguiente...")
             await play_next(ctx)
-
+    else:
+        # Cola vacía
+        pass
 
 async def get_tracks_from_query(ctx, search):
     tracks = []
-    # Lógica Spotify
-    if "open.spotify.com" in search and sp:
-        status_msg = await ctx.send("🟢 Procesando enlace de Spotify...")
+    # Spotify
+    if "spotify.com" in search and sp:
+        status_msg = await ctx.send("🟢 Leyendo Spotify...")
         try:
             if "track" in search:
                 track = sp.track(search)
@@ -110,7 +137,7 @@ async def get_tracks_from_query(ctx, search):
             elif "playlist" in search:
                 results = sp.playlist_items(search)
                 items = results['items']
-                while results['next']:
+                while results['next'] and len(tracks) < 50: 
                     results = sp.next(results)
                     items.extend(results['items'])
                 for item in items:
@@ -120,29 +147,24 @@ async def get_tracks_from_query(ctx, search):
             elif "album" in search:
                 results = sp.album_tracks(search)
                 items = results['items']
-                while results['next']:
-                    results = sp.next(results)
-                    items.extend(results['items'])
                 for track in items:
                     tracks.append(f"{track['artists'][0]['name']} - {track['name']} audio")
                 await status_msg.edit(content=f"✅ Álbum cargado ({len(tracks)} canciones).")
         except Exception as e:
-            await ctx.send(f"❌ Error con Spotify: {e}")
+            await ctx.send(f"❌ Error Spotify: {e}")
             return []
     else:
-        # Lógica YouTube
+        # YouTube
         if not search.startswith("http"):
             search += " audio"
         tracks.append(search)
     return tracks
 
-
 # --- EVENTOS ---
 
 @bot.event
 async def on_ready():
-    print(f'Bot conectado como {bot.user} (Listo para la acción)')
-
+    print(f'✅ Bot conectado como {bot.user} (ID: {bot.user.id})')
 
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -154,54 +176,36 @@ async def on_voice_state_update(member, before, after):
             queues[member.guild.id] = []
             await voice_client.disconnect()
 
-
-# --- COMANDOS PRINCIPALES ---
-
-@bot.command(name='help', aliases=['h'])
-async def help_command(ctx):
-    embed = discord.Embed(
-        title="🎧 Skibidi Bot - Comandos",
-        description="Aquí tienes la lista de comandos para controlar la música.",
-        color=discord.Color.from_rgb(29, 185, 84)  # Color verde Spotify
-    )
-
-    embed.add_field(
-        name="▶️ Reproducción",
-        value="**`!p <canción/link>`**: Reproduce o añade al final de la cola.\n"
-              "**`!pn <canción>`**: **Play Next**. Pone la canción SIGUIENTE en la fila (se cuela).\n"
-              "**`!stop`**: Detiene la música y desconecta al bot.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="📜 Cola y Control",
-        value="**`!q`**: Muestra la cola de reproducción actual.\n"
-              "**`!s`**: Salta la canción actual (`skip`).\n"
-              "**`!shuffle`**: Mezcla aleatoriamente la cola.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="▶️ Reproducción",
-        value="**`!p <canción>`**: Reproduce o añade a la cola.\n"
-              "**`!pn <canción>`**: Pone la canción SIGUIENTE (Play Next).\n"
-              "**`!pause` / `!resume`**: Pausa o reanuda la música.\n"
-              "**`!stop`**: Detiene y desconecta al bot.",
-        inline=False
-    )
-
-    embed.set_footer(text="Soporta enlaces de YouTube y Spotify (Playlists/Albums)")
-    await ctx.send(embed=embed)
-
+# --- COMANDOS BLINDADOS ---
 
 @bot.command(name='play', aliases=['p'])
 async def play(ctx, *, search):
     if not ctx.author.voice: return await ctx.send("❌ Entra a un canal de voz.")
-    if ctx.voice_client is None:
-        await ctx.author.voice.channel.connect(timeout=60, reconnect=True)
-    elif ctx.voice_client.channel != ctx.author.voice.channel:
-        await ctx.voice_client.move_to(ctx.author.voice.channel)
+    
+    # --- LOGICA DE CONEXIÓN ROBUSTA (AUTO-HEALING) ---
+    vc = ctx.voice_client
+    try:
+        if vc is None:
+            # Intentamos conectar
+            await ctx.author.voice.channel.connect(self_deaf=True, timeout=20)
+        elif vc.channel != ctx.author.voice.channel:
+            # Estamos en otro canal, nos movemos
+            await vc.move_to(ctx.author.voice.channel)
+        # Si ya estamos conectados en el mismo canal, NO hacemos nada (evita errores)
+    except asyncio.TimeoutError:
+        await ctx.send("⚠️ Timeout conectando. Intentando forzar reconexión...")
+        # Limpieza de emergencia
+        if ctx.guild.voice_client:
+            await ctx.guild.voice_client.disconnect(force=True)
+        await asyncio.sleep(1)
+        try:
+            await ctx.author.voice.channel.connect(self_deaf=True, timeout=20)
+        except Exception as e:
+            return await ctx.send(f"❌ Error fatal de conexión: {e}. Prueba !reset")
+    except Exception as e:
+        return await ctx.send(f"❌ Error de conexión: {e}")
 
+    # --- CARGA DE CANCIONES ---
     tracks = await get_tracks_from_query(ctx, search)
     if not tracks: return
 
@@ -209,82 +213,19 @@ async def play(ctx, *, search):
     if guild_id not in queues: queues[guild_id] = []
 
     queues[guild_id].extend(tracks)
+    await ctx.send(f"✅ Añadido a la cola ({len(tracks)} items).")
 
-    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+    # Si no está reproduciendo, iniciar.
+    if ctx.voice_client and not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
         await play_next(ctx)
-    elif len(tracks) == 1:
-        clean = tracks[0].replace(" audio", "")
-        await ctx.send(f"✅ Añadido a la cola: **{clean}**")
 
-
-@bot.command(name='playnext', aliases=['pn'])
-async def playnext(ctx, *, search):
-    if not ctx.author.voice: return await ctx.send("❌ Entra a un canal de voz.")
-    if ctx.voice_client is None: await ctx.author.voice.channel.connect()
-
-    tracks = await get_tracks_from_query(ctx, search)
-    if not tracks: return
-
-    guild_id = ctx.guild.id
-    if guild_id not in queues: queues[guild_id] = []
-
-    queues[guild_id][0:0] = tracks
-
-    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
-        await play_next(ctx)
-    else:
-        clean = tracks[0].replace(" audio", "")
-        await ctx.send(f"⚡ **Siguiente en la cola:** {clean}")
-
-
-@bot.command(name='shuffle', aliases=['mix'])
-async def shuffle(ctx):
-    guild_id = ctx.guild.id
-    if guild_id in queues and len(queues[guild_id]) > 0:
-        random.shuffle(queues[guild_id])
-        await ctx.send("🔀 **Cola mezclada aleatoriamente.**")
-    else:
-        await ctx.send("No hay canciones en la cola.")
-
-
-@bot.command(name='skip', aliases=['s'])
-async def skip(ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
-        ctx.voice_client.stop()
-        await ctx.send("⏭️ Saltando...")
-
-
-@bot.command(name='pause')
-async def pause(ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
-        ctx.voice_client.pause()
-        await ctx.send("⏸️ **Música pausada.**")
-    else:
-        await ctx.send("No hay música sonando para pausar.")
-
-@bot.command(name='resume', aliases=['r'])
-async def resume(ctx):
-    if ctx.voice_client and ctx.voice_client.is_paused():
-        ctx.voice_client.resume()
-        await ctx.send("▶️ **Música reanudada.**")
-    else:
-        await ctx.send("La música no está pausada.")
-
-
-
-@bot.command(name='queue', aliases=['q'])
-async def queue(ctx):
-    if ctx.guild.id in queues and queues[ctx.guild.id]:
-        msg = "**Cola de reproducción:**\n"
-        for i, track in enumerate(queues[ctx.guild.id][:10], 1):
-            display_name = track.replace(" audio", "")
-            msg += f"**{i}.** {display_name}\n"
-        if len(queues[ctx.guild.id]) > 10:
-            msg += f"... y {len(queues[ctx.guild.id]) - 10} más."
-        await ctx.send(msg)
-    else:
-        await ctx.send("La cola está vacía.")
-
+@bot.command(name='reset')
+async def reset(ctx):
+    """Comando de emergencia para desbugear el bot"""
+    queues[ctx.guild.id] = []
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect(force=True)
+    await ctx.send("🔄 **Bot reseteado.** Intenta usar !p ahora.")
 
 @bot.command(name='stop')
 async def stop(ctx):
@@ -293,10 +234,25 @@ async def stop(ctx):
         await ctx.voice_client.disconnect()
         await ctx.send("👋 Adiós.")
 
+@bot.command(name='skip', aliases=['s'])
+async def skip(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.stop()
+        await ctx.send("⏭️ Saltando...")
 
+@bot.command(name='queue', aliases=['q'])
+async def queue(ctx):
+    if ctx.guild.id in queues and queues[ctx.guild.id]:
+        msg = "**Cola de reproducción:**\n"
+        for i, track in enumerate(queues[ctx.guild.id][:10], 1):
+            clean = track.replace(" audio", "")
+            msg += f"**{i}.** {clean}\n"
+        await ctx.send(msg)
+    else:
+        await ctx.send("La cola está vacía.")
+
+# --- RUN ---
 if __name__ == "__main__":
     token = os.getenv('DISCORD_TOKEN')
     if token:
         bot.run(token)
-    else:
-        print("Error: DISCORD_TOKEN no encontrado.")
