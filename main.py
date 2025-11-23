@@ -125,6 +125,37 @@ async def play_next(ctx):
         # Cola vacía
         pass
 
+async def ensure_voice_connection(ctx):
+    if not ctx.author.voice:
+        await ctx.send("❌ Entra a un canal de voz.")
+        return False
+    
+    vc = ctx.voice_client
+    try:
+        if vc is None:
+            # Intentamos conectar
+            await ctx.author.voice.channel.connect(self_deaf=True, timeout=20)
+        elif vc.channel != ctx.author.voice.channel:
+            # Estamos en otro canal, nos movemos
+            await vc.move_to(ctx.author.voice.channel)
+        # Si ya estamos conectados en el mismo canal, NO hacemos nada (evita errores)
+        return True
+    except asyncio.TimeoutError:
+        await ctx.send("⚠️ Timeout conectando. Intentando forzar reconexión...")
+        # Limpieza de emergencia
+        if ctx.guild.voice_client:
+            await ctx.guild.voice_client.disconnect(force=True)
+        await asyncio.sleep(1)
+        try:
+            await ctx.author.voice.channel.connect(self_deaf=True, timeout=20)
+            return True
+        except Exception as e:
+            await ctx.send(f"❌ Error fatal de conexión: {e}. Prueba !reset")
+            return False
+    except Exception as e:
+        await ctx.send(f"❌ Error de conexión: {e}")
+        return False
+
 async def get_tracks_from_query(ctx, search):
     tracks = []
     # Spotify
@@ -176,34 +207,51 @@ async def on_voice_state_update(member, before, after):
             queues[member.guild.id] = []
             await voice_client.disconnect()
 
+
+# --- COMANDOS PRINCIPALES ---
+
+@bot.command(name='help', aliases=['h'])
+async def help_command(ctx):
+    embed = discord.Embed(
+        title="🎧 Skibidi Bot - Comandos",
+        description="Aquí tienes la lista de comandos para controlar la música.",
+        color=discord.Color.from_rgb(29, 185, 84)  # Color verde Spotify
+    )
+
+    embed.add_field(
+        name="▶️ Reproducción",
+        value="**`!p <canción/link>`**: Reproduce o añade al final de la cola.\n"
+              "**`!pn <canción>`**: **Play Next**. Pone la canción SIGUIENTE en la fila (se cuela).\n"
+              "**`!stop`**: Detiene la música y desconecta al bot.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📜 Cola y Control",
+        value="**`!q`**: Muestra la cola de reproducción actual.\n"
+              "**`!s`**: Salta la canción actual (`skip`).\n"
+              "**`!shuffle`**: Mezcla aleatoriamente la cola.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="▶️ Reproducción",
+        value="**`!p <canción>`**: Reproduce o añade a la cola.\n"
+              "**`!pn <canción>`**: Pone la canción SIGUIENTE (Play Next).\n"
+              "**`!pause` / `!resume`**: Pausa o reanuda la música.\n"
+              "**`!stop`**: Detiene y desconecta al bot.",
+        inline=False
+    )
+
+    embed.set_footer(text="Soporta enlaces de YouTube y Spotify (Playlists/Albums)")
+    await ctx.send(embed=embed)
+
 # --- COMANDOS BLINDADOS ---
 
 @bot.command(name='play', aliases=['p'])
 async def play(ctx, *, search):
-    if not ctx.author.voice: return await ctx.send("❌ Entra a un canal de voz.")
-    
-    # --- LOGICA DE CONEXIÓN ROBUSTA (AUTO-HEALING) ---
-    vc = ctx.voice_client
-    try:
-        if vc is None:
-            # Intentamos conectar
-            await ctx.author.voice.channel.connect(self_deaf=True, timeout=20)
-        elif vc.channel != ctx.author.voice.channel:
-            # Estamos en otro canal, nos movemos
-            await vc.move_to(ctx.author.voice.channel)
-        # Si ya estamos conectados en el mismo canal, NO hacemos nada (evita errores)
-    except asyncio.TimeoutError:
-        await ctx.send("⚠️ Timeout conectando. Intentando forzar reconexión...")
-        # Limpieza de emergencia
-        if ctx.guild.voice_client:
-            await ctx.guild.voice_client.disconnect(force=True)
-        await asyncio.sleep(1)
-        try:
-            await ctx.author.voice.channel.connect(self_deaf=True, timeout=20)
-        except Exception as e:
-            return await ctx.send(f"❌ Error fatal de conexión: {e}. Prueba !reset")
-    except Exception as e:
-        return await ctx.send(f"❌ Error de conexión: {e}")
+    if not await ensure_voice_connection(ctx):
+        return
 
     # --- CARGA DE CANCIONES ---
     tracks = await get_tracks_from_query(ctx, search)
@@ -218,6 +266,36 @@ async def play(ctx, *, search):
     # Si no está reproduciendo, iniciar.
     if ctx.voice_client and not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
         await play_next(ctx)
+
+
+@bot.command(name='playnext', aliases=['pn'])
+async def playnext(ctx, *, search):
+    if not await ensure_voice_connection(ctx):
+        return
+
+    tracks = await get_tracks_from_query(ctx, search)
+    if not tracks: return
+
+    guild_id = ctx.guild.id
+    if guild_id not in queues: queues[guild_id] = []
+
+    queues[guild_id][0:0] = tracks
+
+    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+        await play_next(ctx)
+    else:
+        clean = tracks[0].replace(" audio", "")
+        await ctx.send(f"⚡ **Siguiente en la cola:** {clean}")
+
+
+@bot.command(name='shuffle', aliases=['mix'])
+async def shuffle(ctx):
+    guild_id = ctx.guild.id
+    if guild_id in queues and len(queues[guild_id]) > 0:
+        random.shuffle(queues[guild_id])
+        await ctx.send("🔀 **Cola mezclada aleatoriamente.**")
+    else:
+        await ctx.send("No hay canciones en la cola.")
 
 @bot.command(name='reset')
 async def reset(ctx):
@@ -239,6 +317,23 @@ async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
         await ctx.send("⏭️ Saltando...")
+
+
+@bot.command(name='pause')
+async def pause(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.pause()
+        await ctx.send("⏸️ **Música pausada.**")
+    else:
+        await ctx.send("No hay música sonando para pausar.")
+
+@bot.command(name='resume', aliases=['r'])
+async def resume(ctx):
+    if ctx.voice_client and ctx.voice_client.is_paused():
+        ctx.voice_client.resume()
+        await ctx.send("▶️ **Música reanudada.**")
+    else:
+        await ctx.send("La música no está pausada.")
 
 @bot.command(name='queue', aliases=['q'])
 async def queue(ctx):
