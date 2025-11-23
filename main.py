@@ -261,7 +261,6 @@ async def play(ctx, *, search):
     if guild_id not in queues: queues[guild_id] = []
 
     queues[guild_id].extend(tracks)
-    queues[guild_id].extend(tracks)
 
     # Si ya está sonando, avisar que se agregó a la cola
     if ctx.voice_client and (ctx.voice_client.is_playing() or ctx.voice_client.is_paused()):
