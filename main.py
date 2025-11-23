@@ -58,7 +58,7 @@ ydl_opts = {
     
     'cachedir': False 
 }
-ytdl = yt_dlp.YoutubeDL(yt_dl_options)
+ytdl = yt_dlp.YoutubeDL(ydl_opts)
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
