@@ -3,10 +3,13 @@ import re
 
 def get_deezer_tracks(url):
     """
-    Busca tracks en Deezer y devuelve una lista de strings "Artista - Canción audio".
+    Busca tracks en Deezer y devuelve un diccionario con:
+    - 'tracks': lista de strings "Artista - Canción audio"
+    - 'type': tipo de contenido ('track', 'album', 'playlist')
     Soporta tracks, albums y playlists.
     """
     tracks = []
+    content_type = 'unknown'
     
     # Extraer ID del enlace
     # Ejemplos: https://www.deezer.com/track/12345, https://deezer.page.link/abcd
@@ -18,15 +21,16 @@ def get_deezer_tracks(url):
             url = response.url
         except Exception as e:
             print(f"❌ Error resolviendo enlace Deezer: {e}")
-            return []
+            return {'tracks': [], 'type': 'unknown'}
 
     # Regex para identificar tipo e ID
     match = re.search(r"deezer\.com/(?:\w{2}/)?(track|album|playlist)/(\d+)", url)
     if not match:
-        return []
+        return {'tracks': [], 'type': 'unknown'}
 
     type_ = match.group(1)
     id_ = match.group(2)
+    content_type = type_
     
     api_url = f"https://api.deezer.com/{type_}/{id_}"
     
@@ -36,7 +40,7 @@ def get_deezer_tracks(url):
         
         if 'error' in data:
             print(f"❌ Error API Deezer: {data['error']}")
-            return []
+            return {'tracks': [], 'type': 'unknown'}
 
         if type_ == 'track':
             artist = data['artist']['name']
@@ -55,6 +59,6 @@ def get_deezer_tracks(url):
                     
     except Exception as e:
         print(f"❌ Error obteniendo datos de Deezer: {e}")
-        return []
+        return {'tracks': [], 'type': 'unknown'}
 
-    return tracks
+    return {'tracks': tracks, 'type': content_type}

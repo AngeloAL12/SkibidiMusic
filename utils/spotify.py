@@ -11,17 +11,23 @@ if config.SPOTIPY_CLIENT_ID:
 
 def get_spotify_tracks(search):
     """
-    Busca tracks en Spotify y devuelve una lista de strings "Artista - Canción audio".
+    Busca tracks en Spotify y devuelve un diccionario con:
+    - 'tracks': lista de strings "Artista - Canción audio"
+    - 'type': tipo de contenido ('track', 'album', 'playlist')
     """
     if not sp:
-        return []
+        return {'tracks': [], 'type': 'unknown'}
 
     tracks = []
+    content_type = 'unknown'
+    
     try:
         if "track" in search:
+            content_type = 'track'
             track = sp.track(search)
             tracks.append(f"{track['artists'][0]['name']} - {track['name']} audio")
         elif "playlist" in search:
+            content_type = 'playlist'
             results = sp.playlist_items(search)
             items = results['items']
             while results['next'] and len(tracks) < 50: 
@@ -31,12 +37,13 @@ def get_spotify_tracks(search):
                 if item['track']:
                     tracks.append(f"{item['track']['artists'][0]['name']} - {item['track']['name']} audio")
         elif "album" in search:
+            content_type = 'album'
             results = sp.album_tracks(search)
             items = results['items']
             for track in items:
                 tracks.append(f"{track['artists'][0]['name']} - {track['name']} audio")
     except Exception as e:
         print(f"❌ Error Spotify: {e}")
-        return []
+        return {'tracks': [], 'type': 'unknown'}
     
-    return tracks
+    return {'tracks': tracks, 'type': content_type}

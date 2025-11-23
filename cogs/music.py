@@ -177,19 +177,37 @@ class Music(commands.Cog):
         # Spotify
         if "spotify.com" in search:
             status_msg = await ctx.send("🟢 Leyendo Spotify...")
-            found_tracks = get_spotify_tracks(search)
-            if found_tracks:
-                tracks.extend(found_tracks)
-                await status_msg.edit(content=f"✅ Playlist cargada ({len(tracks)} canciones).")
+            result = get_spotify_tracks(search)
+            if result['tracks']:
+                tracks.extend(result['tracks'])
+                
+                # Mensajes específicos según el tipo
+                if result['type'] == 'track':
+                    await status_msg.edit(content=f"✅ Canción añadida a la cola.")
+                elif result['type'] == 'album':
+                    await status_msg.edit(content=f"✅ Álbum cargado ({len(result['tracks'])} canciones).")
+                elif result['type'] == 'playlist':
+                    await status_msg.edit(content=f"✅ Playlist cargada ({len(result['tracks'])} canciones).")
+                else:
+                    await status_msg.edit(content=f"✅ {len(result['tracks'])} canciones añadidas.")
             else:
                 await status_msg.edit(content="❌ No se pudieron obtener canciones de Spotify.")
         # Deezer
         elif "deezer.com" in search or "deezer.page.link" in search:
             status_msg = await ctx.send("🌈 Leyendo Deezer...")
-            found_tracks = get_deezer_tracks(search)
-            if found_tracks:
-                tracks.extend(found_tracks)
-                await status_msg.edit(content=f"✅ Playlist cargada ({len(tracks)} canciones).")
+            result = get_deezer_tracks(search)
+            if result['tracks']:
+                tracks.extend(result['tracks'])
+                
+                # Mensajes específicos según el tipo
+                if result['type'] == 'track':
+                    await status_msg.edit(content=f"✅ Canción añadida a la cola.")
+                elif result['type'] == 'album':
+                    await status_msg.edit(content=f"✅ Álbum cargado ({len(result['tracks'])} canciones).")
+                elif result['type'] == 'playlist':
+                    await status_msg.edit(content=f"✅ Playlist cargada ({len(result['tracks'])} canciones).")
+                else:
+                    await status_msg.edit(content=f"✅ {len(result['tracks'])} canciones añadidas.")
             else:
                 await status_msg.edit(content="❌ No se pudieron obtener canciones de Deezer.")
         else:
@@ -316,10 +334,20 @@ class Music(commands.Cog):
     @commands.command(name='queue', aliases=['q'])
     async def queue(self, ctx):
         if ctx.guild.id in self.queues and self.queues[ctx.guild.id]:
+            queue_list = self.queues[ctx.guild.id]
+            total_songs = len(queue_list)
+            display_limit = 15
+            
             msg = "**Cola de reproducción:**\n"
-            for i, track in enumerate(self.queues[ctx.guild.id][:10], 1):
+            for i, track in enumerate(queue_list[:display_limit], 1):
                 clean = track.replace(" audio", "")
                 msg += f"**{i}.** {clean}\n"
+            
+            # Si hay más canciones, mostrar contador
+            if total_songs > display_limit:
+                remaining = total_songs - display_limit
+                msg += f"\n➕ **{remaining} canción{'es' if remaining != 1 else ''} más en la cola**"
+            
             await ctx.send(msg)
         else:
             await ctx.send("La cola está vacía.")
