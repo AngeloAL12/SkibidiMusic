@@ -30,7 +30,10 @@ class SkibidiBot(commands.Bot):
                 print(f"❌ Error cargando extensión {extension}: {e}")
 
     async def on_ready(self):
-        print(f'✅ Bot conectado como {self.user} (ID: {self.user.id})')
+        print(f'--- {self.user} está conectado y listo en el Homelab ---')
+
+        # Esto mostrará: "Escuchando !help"
+        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="!help"))
 
 bot = SkibidiBot()
 
