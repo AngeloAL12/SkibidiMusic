@@ -13,6 +13,8 @@ class Music(commands.Cog):
         self.queues = {}
         self.ffmpeg_options = config.FFMPEG_OPTIONS
         self.disconnect_timers = {}
+        self.preload_tasks = {}  # Tareas de precarga por guild
+        self.preloaded_sources = {}  # Información de canciones precargadas por guild
 
     def cancel_disconnect_timer(self, guild_id):
         if guild_id in self.disconnect_timers:
@@ -29,18 +31,76 @@ class Music(commands.Cog):
         if guild_id in self.disconnect_timers:
             del self.disconnect_timers[guild_id]
 
+    async def preload_next_task(self, guild_id):
+        """Precarga la siguiente canción en la cola (solo extrae URL, no descarga)"""
+        try:
+            # Verificar que hay una siguiente canción
+            if guild_id not in self.queues or len(self.queues[guild_id]) == 0:
+                return
+            
+            next_query = self.queues[guild_id][0]
+            
+            # Verificar que no esté ya precargada
+            if guild_id in self.preloaded_sources and self.preloaded_sources[guild_id]['query'] == next_query:
+                return
+            
+            print(f"🔄 Precargando: {next_query}")
+            
+            # Extraer información con yt-dlp (solo URL, no descarga)
+            track_info = await search_youtube(next_query)
+            
+            if track_info:
+                self.preloaded_sources[guild_id] = {
+                    'query': next_query,
+                    'track_info': track_info
+                }
+                print(f"✅ Precargado: {track_info['title']}")
+            else:
+                print(f"⚠️ No se pudo precargar: {next_query}")
+                
+        except Exception as e:
+            # Error silencioso - no debe afectar la reproducción actual
+            print(f"❌ Error en precarga (silencioso): {e}")
+        finally:
+            # Limpiar referencia a la tarea
+            if guild_id in self.preload_tasks:
+                del self.preload_tasks[guild_id]
+
     async def play_next(self, ctx):
         if ctx.guild.id in self.queues and len(self.queues[ctx.guild.id]) > 0:
             self.cancel_disconnect_timer(ctx.guild.id)
-            query = self.queues[ctx.guild.id].pop(0)
+            guild_id = ctx.guild.id
+            query = self.queues[guild_id].pop(0)
             
             # Verificar conexión antes de reproducir
             if not ctx.voice_client or not ctx.voice_client.is_connected():
                 return # Se desconectó, paramos la cola
 
             try:
-                print(f"🔎 Buscando: {query}")
-                track_info = await search_youtube(query)
+                # Intentar usar datos precargados
+                track_info = None
+                if guild_id in self.preloaded_sources and self.preloaded_sources[guild_id]['query'] == query:
+                    print(f"⚡ Usando canción precargada: {query}")
+                    track_info = self.preloaded_sources[guild_id]['track_info']
+                    del self.preloaded_sources[guild_id]  # Limpiar después de usar
+                else:
+                    # Si hay una tarea de precarga en curso, esperarla
+                    if guild_id in self.preload_tasks:
+                        print(f"⏳ Esperando precarga...")
+                        try:
+                            await asyncio.wait_for(self.preload_tasks[guild_id], timeout=5.0)
+                            # Verificar de nuevo si se precargó
+                            if guild_id in self.preloaded_sources and self.preloaded_sources[guild_id]['query'] == query:
+                                track_info = self.preloaded_sources[guild_id]['track_info']
+                                del self.preloaded_sources[guild_id]
+                                print(f"⚡ Precarga completada justo a tiempo")
+                        except asyncio.TimeoutError:
+                            print(f"⚠️ Timeout esperando precarga, buscando normalmente...")
+                    
+                    # Si no se precargó o falló, buscar normalmente
+                    if not track_info:
+                        print(f"🔎 Buscando: {query}")
+                        track_info = await search_youtube(query)
                 
                 if not track_info:
                     await ctx.send(f"⚠️ No pude encontrar: {query}. Pasando a la siguiente.")
@@ -62,6 +122,15 @@ class Music(commands.Cog):
 
                 ctx.voice_client.play(source, after=after_playing)
                 await ctx.send(f"🎶 Reproduciendo: **{track_info['title']}**")
+                
+                # 🚀 LANZAR TAREA DE PRECARGA EN SEGUNDO PLANO
+                # Cancelar cualquier tarea de precarga anterior
+                if guild_id in self.preload_tasks:
+                    self.preload_tasks[guild_id].cancel()
+                
+                # Crear nueva tarea de precarga para la siguiente canción
+                if len(self.queues[guild_id]) > 0:
+                    self.preload_tasks[guild_id] = asyncio.create_task(self.preload_next_task(guild_id))
                 
             except Exception as e:
                 print(f"Error reproduciendo {query}: {e}")
@@ -108,19 +177,37 @@ class Music(commands.Cog):
         # Spotify
         if "spotify.com" in search:
             status_msg = await ctx.send("🟢 Leyendo Spotify...")
-            found_tracks = get_spotify_tracks(search)
-            if found_tracks:
-                tracks.extend(found_tracks)
-                await status_msg.edit(content=f"✅ Playlist cargada ({len(tracks)} canciones).")
+            result = get_spotify_tracks(search)
+            if result['tracks']:
+                tracks.extend(result['tracks'])
+                
+                # Mensajes específicos según el tipo
+                if result['type'] == 'track':
+                    await status_msg.edit(content=f"✅ Canción añadida a la cola.")
+                elif result['type'] == 'album':
+                    await status_msg.edit(content=f"✅ Álbum cargado ({len(result['tracks'])} canciones).")
+                elif result['type'] == 'playlist':
+                    await status_msg.edit(content=f"✅ Playlist cargada ({len(result['tracks'])} canciones).")
+                else:
+                    await status_msg.edit(content=f"✅ {len(result['tracks'])} canciones añadidas.")
             else:
                 await status_msg.edit(content="❌ No se pudieron obtener canciones de Spotify.")
         # Deezer
         elif "deezer.com" in search or "deezer.page.link" in search:
             status_msg = await ctx.send("🌈 Leyendo Deezer...")
-            found_tracks = get_deezer_tracks(search)
-            if found_tracks:
-                tracks.extend(found_tracks)
-                await status_msg.edit(content=f"✅ Playlist cargada ({len(tracks)} canciones).")
+            result = get_deezer_tracks(search)
+            if result['tracks']:
+                tracks.extend(result['tracks'])
+                
+                # Mensajes específicos según el tipo
+                if result['type'] == 'track':
+                    await status_msg.edit(content=f"✅ Canción añadida a la cola.")
+                elif result['type'] == 'album':
+                    await status_msg.edit(content=f"✅ Álbum cargado ({len(result['tracks'])} canciones).")
+                elif result['type'] == 'playlist':
+                    await status_msg.edit(content=f"✅ Playlist cargada ({len(result['tracks'])} canciones).")
+                else:
+                    await status_msg.edit(content=f"✅ {len(result['tracks'])} canciones añadidas.")
             else:
                 await status_msg.edit(content="❌ No se pudieron obtener canciones de Deezer.")
         else:
@@ -182,8 +269,19 @@ class Music(commands.Cog):
     @commands.command(name='reset')
     async def reset(self, ctx):
         """Comando de emergencia para desbugear el bot"""
-        self.cancel_disconnect_timer(ctx.guild.id)
-        self.queues[ctx.guild.id] = []
+        guild_id = ctx.guild.id
+        self.cancel_disconnect_timer(guild_id)
+        self.queues[guild_id] = []
+        
+        # Cancelar tarea de precarga si existe
+        if guild_id in self.preload_tasks:
+            self.preload_tasks[guild_id].cancel()
+            del self.preload_tasks[guild_id]
+        
+        # Limpiar datos precargados
+        if guild_id in self.preloaded_sources:
+            del self.preloaded_sources[guild_id]
+        
         if ctx.voice_client:
             await ctx.voice_client.disconnect(force=True)
         await ctx.send("🔄 **Bot reseteado.** Intenta usar !p ahora.")
@@ -191,8 +289,19 @@ class Music(commands.Cog):
     @commands.command(name='stop')
     async def stop(self, ctx):
         if ctx.voice_client:
-            self.cancel_disconnect_timer(ctx.guild.id)
-            self.queues[ctx.guild.id] = []
+            guild_id = ctx.guild.id
+            self.cancel_disconnect_timer(guild_id)
+            self.queues[guild_id] = []
+            
+            # Cancelar tarea de precarga si existe
+            if guild_id in self.preload_tasks:
+                self.preload_tasks[guild_id].cancel()
+                del self.preload_tasks[guild_id]
+            
+            # Limpiar datos precargados
+            if guild_id in self.preloaded_sources:
+                del self.preloaded_sources[guild_id]
+            
             await ctx.voice_client.disconnect()
             await ctx.send("👋 Adiós.")
 
@@ -225,10 +334,20 @@ class Music(commands.Cog):
     @commands.command(name='queue', aliases=['q'])
     async def queue(self, ctx):
         if ctx.guild.id in self.queues and self.queues[ctx.guild.id]:
+            queue_list = self.queues[ctx.guild.id]
+            total_songs = len(queue_list)
+            display_limit = 15
+            
             msg = "**Cola de reproducción:**\n"
-            for i, track in enumerate(self.queues[ctx.guild.id][:10], 1):
+            for i, track in enumerate(queue_list[:display_limit], 1):
                 clean = track.replace(" audio", "")
                 msg += f"**{i}.** {clean}\n"
+            
+            # Si hay más canciones, mostrar contador
+            if total_songs > display_limit:
+                remaining = total_songs - display_limit
+                msg += f"\n➕ **{remaining} canción{'es' if remaining != 1 else ''} más en la cola**"
+            
             await ctx.send(msg)
         else:
             await ctx.send("La cola está vacía.")
