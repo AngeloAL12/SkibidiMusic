@@ -60,7 +60,7 @@ except Exception as e:
     print(f"Error inicializando yt-dlp: {e}")
 
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -reconnect_on_network_error 1',
     'options': '-vn'
 }
 
